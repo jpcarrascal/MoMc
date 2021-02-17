@@ -9,7 +9,7 @@ Arduino-based modular MIDI pedal controller.
 * MIDI Class-compliant. Works as USB plug-and-play controller for computer software, no driver required.
 * Motherboard MIDI-USB passthrough: it passes PC and CC messages from USB-MIDI through to USB ports. Acts (almost) like a USB MIDI interface, so it is possible to control pedals from a computer with no additional hardware.
 
-(https://raw.githubusercontent.com/jpcarrascal/MoMc/main/MoMc-BlockDiagram.png)
+![Block diagram](https://raw.githubusercontent.com/jpcarrascal/MoMc/main/MoMc-BlockDiagram.png)
 
 (*) _MIDI ports are 1/8" TRS jack, conforming to the MIDI standard described in [the MIDI.org website](https://www.midi.org/specifications/midi-transports-specifications/specification-for-use-of-trs-connectors-with-midi-devices-2) (sometimes referred as "TRS-A")._
 
