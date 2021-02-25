@@ -73,12 +73,6 @@ void loop() {
   rx = MidiUSB.read();
   if (rx.header != 0) {
     if(rx.header == 0xB) { // Controller Change
-      Serial.print(rx.byte1);
-      Serial.print("\t");
-      Serial.print(rx.byte2);
-      Serial.print("\t");
-      Serial.print(rx.byte3);
-      Serial.println();
       // If a CC that corresponds to one of the knobs is received,
       // switch to "pick-up" mode by blocking sending MIDI CC 
       // until the knob position and the controller value match.
