@@ -65,34 +65,47 @@ void setup() {
 }
 
 void loop() {
-  midiEventPacket_t rx;
-  rx = MidiUSB.read();
-  if (rx.header != 0) {
-    if(rx.header == 0xB) {
-
-    } else if(rx.header == 0xC) {
-
-    }
-    // Would be great to make this work instead of the two calls above
-    // so not only CC and PC messages are passed through:
-    // MIDI.send( rx.header, rx.byte2, rx.byte3, (rx.byte1 >> 4) & 0x0F);
-    // Ref:
-    // - Arduino MIUSB input example
-    // - https://arduino.stackexchange.com/questions/41684/midiusb-why-is-the-command-put-twice
-    // - https://fortyseveneffects.github.io/arduino_midi_library/a00032.html#ga58454de7d3ee8ee824f955c805151ad2
-  }
-  
   sw_1.update();
   sw_3.update();
   sw_2.update();
   sw_4.update();
+  midiEventPacket_t rx;
+  rx = MidiUSB.read();
+  if (rx.header != 0) {
+    if(rx.header == 0xB) { // Controller Change
+      Serial.print(rx.byte1);
+      Serial.print("\t");
+      Serial.print(rx.byte2);
+      Serial.print("\t");
+      Serial.print(rx.byte3);
+      Serial.println();
+      // If a CC that corresponds to one of the knobs is received,
+      // switch to "pick-up" mode by blocking sending MIDI CC 
+      // until the knob position and the controller value match.
+      int ccNumber = rx.byte2;
+      int index = isPotCC(ccNumber);
+      if( index >= 0 && pickUpMode) { // it is a knob CC
+        potvalIN[index] = rx.byte3;
+        if(abs( potvalIN[index] - potval[index] ) < 2) {
+          potPosCorrect[index] = true;
+          digitalWrite(leds[index],LOW);
+        } else {
+          digitalWrite(leds[index],HIGH);
+          potPosCorrect[index] = false;          
+        }
+      }
+    } else if(rx.header == 0xC) { // Program Change
+
+    }
+  }
 
   int potvalNew[4];
   for(int i=0; i<4; i++) {
     potvalNew[i] = analogRead(pot[i]);
   }
+  
   for(int i=0; i<4; i++) {
-    if( abs(potval[i] - potvalNew[i]) > 3) {
+    if( abs(potval[i] - potvalNew[i]) > 2) {
       int outval = mapAndClamp(potval[i], i);
       potval[i] = potvalNew[i];
       if(potPosCorrect[i]) {
@@ -103,6 +116,10 @@ void loop() {
         // If so, allow sending MIDI again (i.e. pick-up).
         if( abs( outval - potvalIN[i] ) < 2 ) {
           potPosCorrect[i] = true;
+          digitalWrite(leds[i],LOW);
+        } else {
+          // turn corresponding led on
+          digitalWrite(leds[i],HIGH);
         }
       }
     }
@@ -212,6 +229,14 @@ int mapAndClamp(int input, int i) {
   if(outval < 0) outval = 0;
   if(outval>127) outval = 127;
   return (outval);
+}
+
+int isPotCC(int val) {
+  for(int i=0; i<POT_COUNT; i++) {
+    if(cc_pot[i] == val)
+      return (i);
+  }
+  return (-1);
 }
 
 void intro() {
