@@ -22,7 +22,6 @@ PushButton sw_4 = PushButton(4, ENABLE_INTERNAL_PULLUP);
 const int CCchannel = 1;
 const int INchannel = 16;
 const int PCchannel = 13;
-unsigned long previousMillis = 0;
 const int note_1 = 28;
 const int note_2 = 29;
 const int note_3 = 30;
@@ -34,6 +33,7 @@ const int leds[4] = {8,9,10,12};
 int potval[POT_COUNT];
 int potvalIN[POT_COUNT];
 bool potPosCorrect[POT_COUNT] = {true, true, true, true};
+bool onUSB = false;
 
 void setup() {
   // MIDI baud rate
@@ -61,36 +61,41 @@ void setup() {
   }
   
   Wire.begin();
+  onUSB = USBSTA >> VBUS & 1;
   intro();
 }
 
 void loop() {
+  onUSB = USBSTA >> VBUS & 1;
+
   sw_1.update();
   sw_3.update();
   sw_2.update();
   sw_4.update();
   midiEventPacket_t rx;
-  rx = MidiUSB.read();
-  if (rx.header != 0) {
-    if(rx.header == 0xB) { // Controller Change
-      // If a CC that corresponds to one of the knobs is received,
-      // switch to "pick-up" mode by blocking sending MIDI CC 
-      // until the knob position and the controller value match.
-      int ccNumber = rx.byte2;
-      int index = isPotCC(ccNumber);
-      if( index >= 0 && pickUpMode) { // it is a knob CC
-        potvalIN[index] = rx.byte3;
-        if(abs( potvalIN[index] - potval[index] ) < 2) {
-          potPosCorrect[index] = true;
-          digitalWrite(leds[index],LOW);
-        } else {
-          digitalWrite(leds[index],HIGH);
-          potPosCorrect[index] = false;          
+  if(onUSB) {
+    rx = MidiUSB.read();
+    if (rx.header != 0) {
+      if(rx.header == 0xB) { // Controller Change
+        // If a CC that corresponds to one of the knobs is received,
+        // switch to "pick-up" mode by blocking sending MIDI CC 
+        // until the knob position and the controller value match.
+        int ccNumber = rx.byte2;
+        int index = isPotCC(ccNumber);
+        if( index >= 0 && pickUpMode) { // it is a knob CC
+          potvalIN[index] = rx.byte3;
+          if(abs( potvalIN[index] - potval[index] ) < 2) {
+            potPosCorrect[index] = true;
+            digitalWrite(leds[index],LOW);
+          } else {
+            digitalWrite(leds[index],HIGH);
+            potPosCorrect[index] = false;          
+          }
         }
+      } else if(rx.header == 0xC) { // Program Change
+  
       }
-    } else if(rx.header == 0xC) { // Program Change
-
-    }
+    }  
   }
 
   int potvalNew[4];
@@ -99,7 +104,7 @@ void loop() {
   }
   
   for(int i=0; i<4; i++) {
-    if( abs(potval[i] - potvalNew[i]) > 2) {
+    if( abs(potval[i] - potvalNew[i]) > 3) {
       int outval = mapAndClamp(potval[i], i);
       potval[i] = potvalNew[i];
       if(potPosCorrect[i]) {
