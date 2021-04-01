@@ -28,6 +28,7 @@ int leftLEDState = HIGH;
 int rightLEDState = HIGH;
 const long blinkInterval = 300; // blink interval
 const int PCchannel = 13;
+const int PCchannelB = 14;
 const int CCchannel = 1;
 const int NoteChannel = 1;
 const int INchannel = 16;
@@ -165,8 +166,10 @@ void onButtonPressed(Button& btn){
       noteOnSend(note_top_right, 127, NoteChannel);
     }
   } else if (btn.is(sw_center)) {
-    if(mode == "PC")
+    if(mode == "PC") {
+      pcSend(currentProgram, PCchannelB);
       setCCmode();
+    }
     else {
       ccSend(cc_center, 127, CCchannel);
       noteOnSend(note_center, 127, NoteChannel);
