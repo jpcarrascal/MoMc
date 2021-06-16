@@ -3,7 +3,8 @@
 #include <PushButton.h>
 #include <Bounce2.h>
 #include <MIDI.h>
-#include "MIDIUSB.h"
+//#include "MIDIUSB.h"
+#include <USB-MIDI.h>
 #include <Wire.h>
 
 #define POT_COUNT 4 // We have 4 potentiometers/knobs
@@ -48,6 +49,9 @@ const int note_top_left      = 12;
 const int note_top_right     = 13;
 const int note_bottom_left   = 14;
 const int note_bottom_right  = 15;
+// MIDI Machine Control messages:
+uint8_t mmcStopMsg[] = {0xF0, 0x7F, 0x7F, 0x06, 0x01, 0xF7};
+uint8_t mmcStartMsg[] = {0xF0, 0x7F, 0x7F, 0x06, 0x02, 0xF7};
 
 
 // These CCs are reserved for the Daughterboard:
@@ -150,6 +154,7 @@ void onButtonPressed(Button& btn){
     }
     else {
       ccSend(cc_top_left, 127, CCchannel);
+      mmcStart();
       noteOnSend(note_top_left, 127, NoteChannel);
     }
   } else if (btn.is(sw_top_right)){
@@ -163,6 +168,7 @@ void onButtonPressed(Button& btn){
     }
     else {
       ccSend(cc_top_right, 127, CCchannel);
+      mmcStop();
       noteOnSend(note_top_right, 127, NoteChannel);
     }
   } else if (btn.is(sw_center)) {
@@ -227,6 +233,35 @@ void ccSend(int cc, int value, int channel) {
     }
   }
 }
+
+void mmcStart() {
+  if(debug) {
+    debugThis("MMC START", 0, 0);
+  } else {
+    if(srlMIDI) {
+      MIDI.sendSysEx(6, mmcStartMsg, true);
+    }
+    if(usbMIDI) {
+      MidiUSB_sendSysEx(mmcStartMsg, 6);
+      //MidiUSB.flush();
+    }
+  }
+}
+
+void mmcStop() {
+  if(debug) {
+    debugThis("MMC STOP", 0, 0);
+  } else {
+    if(srlMIDI) {
+      MIDI.sendSysEx(6, mmcStopMsg, true);
+    }
+    if(usbMIDI) {
+      MidiUSB_sendSysEx(mmcStopMsg, 6);
+      //MidiUSB.flush();
+    }
+  }
+}
+
 
 void pcSend(int value, int channel) {
   if(debug) {
@@ -320,4 +355,53 @@ void fadeLed(int led) {
     analogWrite(led,val/2);
     delay(delayTime);
   }
+}
+
+
+// Source for this function: https://github.com/arduino-libraries/MIDIUSB/issues/19
+// TODO: use the USB transport of FortySevenEffects Arduino MIDI Library
+//       info here: https://github.com/lathoub/Arduino-USBMIDI
+void MidiUSB_sendSysEx(const uint8_t *data, size_t size)
+{
+    if (data == NULL || size == 0) return;
+
+    size_t midiDataSize = (size+2)/3*4;
+    uint8_t midiData[midiDataSize];
+    const uint8_t *d = data;
+    uint8_t *p = midiData;
+    size_t bytesRemaining = size;
+
+    while (bytesRemaining > 0) {
+        switch (bytesRemaining) {
+        case 1:
+            *p++ = 5;   // SysEx ends with following single byte
+            *p++ = *d;
+            *p++ = 0;
+            *p = 0;
+            bytesRemaining = 0;
+            break;
+        case 2:
+            *p++ = 6;   // SysEx ends with following two bytes
+            *p++ = *d++;
+            *p++ = *d;
+            *p = 0;
+            bytesRemaining = 0;
+            break;
+        case 3:
+            *p++ = 7;   // SysEx ends with following three bytes
+            *p++ = *d++;
+            *p++ = *d++;
+            *p = *d;
+            bytesRemaining = 0;
+            break;
+        default:
+            *p++ = 4;   // SysEx starts or continues
+            *p++ = *d++;
+            *p++ = *d++;
+            *p++ = *d++;
+            bytesRemaining -= 3;
+            break;
+        }
+    }
+    MidiUSB.write(midiData, midiDataSize);
 }
