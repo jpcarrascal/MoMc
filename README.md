@@ -26,4 +26,4 @@ Arduino-based modular MIDI pedal controller.
 - Extend passthrough to support any MIDI message type.
 - MMC commands are implemented using a workaround (MidiUSB_sendSysEx()) described here: https://github.com/arduino-libraries/MIDIUSB/issues/19
   This should be replaced by a proper implementation of SysEx/MMC using the USB transport of FortySevenEffects Arduino MIDI Library
-  info here: https://github.com/lathoub/Arduino-
+  info here: https://github.com/lathoub/Arduino-AppleMIDI-Library
