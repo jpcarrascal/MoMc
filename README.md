@@ -14,6 +14,7 @@ Arduino-based modular MIDI pedal controller.
 (*) _MIDI ports are 1/8" TRS jack, conforming to the MIDI standard described in [the MIDI.org website](https://www.midi.org/specifications/midi-transports-specifications/specification-for-use-of-trs-connectors-with-midi-devices-2) (sometimes referred as "TRS-A")._
 
 ### Latest changes
+- 2022-01-29: PC changes are sent to an aray of channels, as opposed to a single channel.
 - 2021-06-16: Added MMC Start (top-left footswitch) and Stop (top-right footswitch).
 
 ### Dependencies

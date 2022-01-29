@@ -28,8 +28,8 @@ int mainLEDState = HIGH;
 int leftLEDState = HIGH;
 int rightLEDState = HIGH;
 const long blinkInterval = 300; // blink interval
-const int PCchannel = 13;
-const int PCchannelB = 11;
+int PCchannel[] = {13, 10};
+const int PCchannelB = 11; // For song switching in computer
 const int CCchannel = 1;
 const int NoteChannel = 1;
 const int INchannel = 16;
@@ -61,7 +61,7 @@ const int expPedal = A0;
 MIDI_CREATE_DEFAULT_INSTANCE();
 void setup() {
   MIDI.begin(INchannel);
-  MIDI.turnThruOff();
+  MIDI.turnThruOn();
   // MIDI baud rate
   if(debug)
     Serial.begin(9600);
@@ -274,6 +274,25 @@ void pcSend(int value, int channel) {
       midiEventPacket_t event = {0x0C, 0xC0 | channel, value, 0};
       MidiUSB.sendMIDI(event);
       MidiUSB.flush();
+    }
+  }
+}
+
+void pcSend(int value, int channel[]) {
+  if(debug) {
+    debugThis("pc", -1, value);
+  } else {
+    for(int i=0; i<sizeof(channel); i++)
+    {
+      int ch = channel[i];
+      if(srlMIDI) {
+        MIDI.sendProgramChange(value, ch);
+      }
+      if(usbMIDI) {
+        midiEventPacket_t event = {0x0C, 0xC0 | ch, value, 0};
+        MidiUSB.sendMIDI(event);
+        MidiUSB.flush();
+      }
     }
   }
 }
