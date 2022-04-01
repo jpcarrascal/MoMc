@@ -28,7 +28,8 @@ int mainLEDState = HIGH;
 int leftLEDState = HIGH;
 int rightLEDState = HIGH;
 const long blinkInterval = 300; // blink interval
-int PCchannel[] = {13, 10, 16};
+int PCchannel[3] = {13, 10, 16};
+int nPCchannels = 3;
 const int PCchannelB = 11; // For song switching in computer
 const int CCchannel = 1;
 const int NoteChannel = 1;
@@ -150,7 +151,7 @@ void onButtonPressed(Button& btn){
         currentProgram--;
       else
         currentProgram = maxPgm;
-      pcSend(currentProgram, PCchannel);
+      pcSend(currentProgram, PCchannel, nPCchannels);
     }
     else {
       ccSend(cc_top_left, 127, CCchannel);
@@ -164,7 +165,7 @@ void onButtonPressed(Button& btn){
         currentProgram++;
       else
         currentProgram = 0;
-      pcSend(currentProgram, PCchannel);
+      pcSend(currentProgram, PCchannel, nPCchannels);
     }
     else {
       ccSend(cc_top_right, 127, CCchannel);
@@ -278,11 +279,11 @@ void pcSend(int value, int channel) {
   }
 }
 
-void pcSend(int value, int channel[]) {
+void pcSend(int value, int channel[], int nChannels) {
   if(debug) {
     debugThis("pc", -1, value);
   } else {
-    for(int i=0; i<sizeof(channel); i++)
+    for(int i=0; i<nChannels; i++)
     {
       int ch = channel[i];
       if(srlMIDI) {
