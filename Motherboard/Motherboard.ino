@@ -6,6 +6,9 @@
 //#include "MIDIUSB.h"
 #include <USB-MIDI.h>
 #include <Wire.h>
+// OLED display, text mode:
+#include <U8x8lib.h>
+U8X8_SSD1306_128X64_NONAME_HW_I2C u8x8(/* reset=*/ U8X8_PIN_NONE); 
 
 #define POT_COUNT 4 // We have 4 potentiometers/knobs
 
@@ -30,15 +33,16 @@ int rightLEDState = HIGH;
 const long blinkInterval = 300; // blink interval
 int PCchannel[3] = {13, 10, 16};
 int nPCchannels = 3;
-const int PCchannelB = 11; // For song switching in computer
+//const int PCchannelB = 11; // For song switching in computer
 const int CCchannel = 1;
 const int NoteChannel = 1;
 const int INchannel = 16;
 const int maxPgm = 63; // Max number of patches. Zoia = 63
+int tentativeProgram = 0;
 int currentProgram = 0;
 int PCmodeTimeout = 0;
 unsigned long previousMillis = 0;
-String mode = "CC"; // "CC" = Control Change, PC" = Program Change
+int mode = 1; // 1 = Control Change, 2 = Program Change
 const int cc_center       = 2;
 const int cc_top_left     = 9;
 const int cc_top_right    = 10;
@@ -58,6 +62,44 @@ uint8_t mmcStartMsg[] = {0xF0, 0x7F, 0x7F, 0x06, 0x02, 0xF7};
 // These CCs are reserved for the Daughterboard:
 //const int cc_pot[POT_COUNT] = {3, 4, 5, 6};
 const int expPedal = A0;
+
+const char pgm00[] PROGMEM = "LOOOP";
+const char pgm01[] PROGMEM = "SADTF";
+const char pgm02[] PROGMEM = "LITTL\nBOX";
+const char pgm03[] PROGMEM = "A\nVECES";
+
+const char pgm04[] PROGMEM = "EN\nREMOLINOS";
+const char pgm05[] PROGMEM = "FOMO";
+const char pgm06[] PROGMEM = "SI TE\nVAS";
+const char pgm07[] PROGMEM = "EL\nANSIA";
+
+const char pgm08[] PROGMEM = "PLANEADR";
+const char pgm09[] PROGMEM = "YOU\nGOT IT";
+const char pgm10[] PROGMEM = "DARK\nPLACES";
+const char pgm11[] PROGMEM = "LA\nSED";
+
+const char pgm12[] PROGMEM = "BREAK\nCAGE";
+
+const char* const pgmNames[] PROGMEM = {pgm00, pgm01, pgm02, pgm03,
+          pgm04, pgm05, pgm06, pgm07,
+          pgm08, pgm09, pgm10, pgm11,
+          pgm12};
+
+char nameBuf[24];
+
+void showProgramName(uint8_t index) {
+  u8x8.setCursor(0, 0);
+  if(index < sizeof(pgmNames)) {
+    nameBuf[0] = '0' + (index / 10);
+    nameBuf[1] = '0' + (index % 10);
+    nameBuf[2] = '.';
+    strncpy_P(nameBuf + 3, (char*)pgm_read_word(&pgmNames[index]), sizeof(nameBuf) - 4);
+    nameBuf[sizeof(nameBuf) - 1] = '\0';
+    u8x8.print(nameBuf);
+  } else {
+    u8x8.print(u8x8_u16toa(index, 2));
+  }
+}
 
 MIDI_CREATE_DEFAULT_INSTANCE();
 void setup() {
@@ -90,8 +132,14 @@ void setup() {
   sw_center.onHold(1500, setPCmode);
 
   // For rceiving data from Daughterboard
-  Wire.begin(8);
-  Wire.onReceive(receiveEvent);
+  //Wire.begin(8);
+  //Wire.onReceive(receiveEvent);
+  Wire.begin();
+  u8x8.begin();
+  // u8x8.setFont(u8x8_font_inr46_4x8_n); // big numbers
+  u8x8.setFont(u8x8_font_profont29_2x3_r);
+  //u8x8.print(u8x8_u16toa(0, 2));
+  showProgramName(0);
 }
 
 void loop() {
@@ -122,18 +170,29 @@ void loop() {
   sw_bottom_left.update();
   sw_bottom_right.update();
   unsigned long currentMillis = millis();
-  if(mode == "PC") {
+  if(mode == 2) {
     if (currentMillis - previousMillis >= blinkInterval) {
       previousMillis = currentMillis;
       rightLEDState = (!rightLEDState);
       analogWrite(rightLED, rightLEDState);
+      if(rightLEDState) {
+          showProgramName(tentativeProgram);
+      } else {
+          u8x8.clear();
+      }
     } 
   }
 
   // Auto switch back to CC mode:
-  if(mode == "PC" && !sw_center.isPressed()) {
+  if(mode == 2 && !sw_center.isPressed()) {
     PCmodeTimeout++;
     if(PCmodeTimeout > 30000) {
+      if(currentProgram != tentativeProgram){
+        currentProgram = tentativeProgram;
+        pcSend(currentProgram, PCchannel, nPCchannels);
+      } else {
+        showProgramName(currentProgram);
+      }
       setCCmode();
     }
   }
@@ -145,13 +204,13 @@ void configurePushButton(Bounce& bouncedButton){
 
 void onButtonPressed(Button& btn){
   if(btn.is(sw_top_left)) {
-    if(mode == "PC") {
+    if(mode == 2) {
       PCmodeTimeout = 0;
-      if(currentProgram > 0)
-        currentProgram--;
+      if(tentativeProgram > 0)
+        tentativeProgram--;
       else
-        currentProgram = maxPgm;
-      pcSend(currentProgram, PCchannel, nPCchannels);
+        tentativeProgram = maxPgm;
+      //pcSend(tentativeProgram, PCchannel, nPCchannels);
     }
     else {
       ccSend(cc_top_left, 127, CCchannel);
@@ -159,13 +218,13 @@ void onButtonPressed(Button& btn){
       noteOnSend(note_top_left, 127, NoteChannel);
     }
   } else if (btn.is(sw_top_right)){
-    if(mode == "PC") {
+    if(mode == 2) {
       PCmodeTimeout = 0;
-      if(currentProgram < maxPgm)
-        currentProgram++;
+      if(tentativeProgram < maxPgm)
+        tentativeProgram++;
       else
-        currentProgram = 0;
-      pcSend(currentProgram, PCchannel, nPCchannels);
+        tentativeProgram = 0;
+      //pcSend(tentativeProgram, PCchannel, nPCchannels);
     }
     else {
       ccSend(cc_top_right, 127, CCchannel);
@@ -173,8 +232,9 @@ void onButtonPressed(Button& btn){
       noteOnSend(note_top_right, 127, NoteChannel);
     }
   } else if (btn.is(sw_center)) {
-    if(mode == "PC") {
-      pcSend(currentProgram, PCchannelB);
+    if(mode == 2) {
+      currentProgram = tentativeProgram;
+      pcSend(currentProgram, PCchannel, nPCchannels);
       setCCmode();
     }
     else {
@@ -192,13 +252,13 @@ void onButtonPressed(Button& btn){
 
 void onButtonReleased(Button& btn, uint16_t duration){
   if(btn.is(sw_top_left)) {
-    if(mode == "CC")
+    if(mode == 1)
       ccSend(cc_top_left, 0, CCchannel);
   } else if (btn.is(sw_top_right)){
-    if(mode == "CC")
+    if(mode == 1)
       ccSend(cc_top_right, 0, CCchannel);
   } else if (btn.is(sw_center)) {
-    if(mode == "CC")
+    if(mode == 1)
       ccSend(cc_center, 0, CCchannel);
   } else if (btn.is(sw_bottom_right)){
       ccSend(cc_bottom_right, 0, CCchannel);
@@ -209,15 +269,17 @@ void onButtonReleased(Button& btn, uint16_t duration){
 
 void setCCmode() {
   if(debug) Serial.println("CC mode");
-  mode = "CC";
+  mode = 1;
   digitalWrite(rightLED, LOW);
   PCmodeTimeout = 0;
+  showProgramName(currentProgram);
+  tentativeProgram = currentProgram;
 }
 
 void setPCmode() {
   if(debug) Serial.println("PC mode");
   ccSend(cc_center, 0, CCchannel);
-  mode = "PC";
+  mode = 2;
 }
 
 void ccSend(int cc, int value, int channel) {
@@ -280,6 +342,7 @@ void pcSend(int value, int channel) {
 }
 
 void pcSend(int value, int channel[], int nChannels) {
+  showProgramName(value);
   if(debug) {
     debugThis("pc", -1, value);
   } else {
@@ -339,7 +402,7 @@ void receiveEvent(int howMany) {
   digitalWrite(leftLED, LOW);
 }
 
-void debugThis(String name, int i, int value) {
+void debugThis(const char* name, int i, int value) {
   if(debug) {
     Serial.print(name);
     Serial.print("[");
