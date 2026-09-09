@@ -65,36 +65,89 @@ const int expPedal = A0;
 
 const char pgm00[] PROGMEM = "LOOOP";
 const char pgm01[] PROGMEM = "SADTF";
-const char pgm02[] PROGMEM = "LITTL\nBOX";
-const char pgm03[] PROGMEM = "A\nVECES";
+const char pgm02[] PROGMEM = "LITTLE BOX";
+const char pgm03[] PROGMEM = "A VECES";
 
-const char pgm04[] PROGMEM = "EN\nREMOLINOS";
+const char pgm04[] PROGMEM = "EN REMOLINOS";
 const char pgm05[] PROGMEM = "FOMO";
-const char pgm06[] PROGMEM = "SI TE\nVAS";
-const char pgm07[] PROGMEM = "EL\nANSIA";
+const char pgm06[] PROGMEM = "SI TE VAS";
+const char pgm07[] PROGMEM = "EL ANSIA";
 
-const char pgm08[] PROGMEM = "PLANEADR";
-const char pgm09[] PROGMEM = "YOU\nGOT IT";
-const char pgm10[] PROGMEM = "DARK\nPLACES";
-const char pgm11[] PROGMEM = "LA\nSED";
+const char pgm08[] PROGMEM = "PLANEADOR";
+const char pgm09[] PROGMEM = "YOU GOT IT";
+const char pgm10[] PROGMEM = "DARK PLACES";
+const char pgm11[] PROGMEM = "LA SED";
 
-const char pgm12[] PROGMEM = "BREAK\nCAGE";
+const char pgm12[] PROGMEM = "BREAK CAGE";
 
-const char* const pgmNames[] PROGMEM = {pgm00, pgm01, pgm02, pgm03,
+const char* const pgmNames[] PROGMEM = {
+          pgm00, pgm01, pgm02, pgm03,
           pgm04, pgm05, pgm06, pgm07,
           pgm08, pgm09, pgm10, pgm11,
-          pgm12};
+          pgm12
+};
 
-char nameBuf[24];
+const uint8_t LINE_LEN = 8;              // chars per line with the 2x4 font
+char nameBuf[LINE_LEN * 2 + 2];          // 8 + '\n' + 8 + '\0' = 18
+
+void formatProgramName(uint8_t index) {
+  char raw[LINE_LEN * 2 + 2];
+
+  raw[0] = '0' + (index / 10);
+  raw[1] = '0' + (index % 10);
+  raw[2] = '.';
+  strncpy_P(raw + 3, (char*)pgm_read_word(&pgmNames[index]), sizeof(raw) - 4);
+  raw[sizeof(raw) - 1] = '\0';
+
+  uint8_t len = strlen(raw);
+
+  if (len <= LINE_LEN) {                 // fits on one line, nothing to do
+    strcpy(nameBuf, raw);
+    return;
+  }
+
+  uint8_t split;                         // index in raw where line 2 starts
+  bool    drop;                          // is the char at the split consumed?
+
+  char* nl = strchr(raw, '\n');          // 1. honour an explicit newline
+  if (nl) {
+    split = nl - raw;
+    drop  = true;
+  } else {
+    char* sp = strchr(raw + 3, ' ');     // 2. first space
+    if (sp) {
+      split = sp - raw;
+      drop  = true;
+    } else {                             // 3. hard split
+      split = LINE_LEN;
+      drop  = false;
+    }
+  }
+
+  if (split > LINE_LEN) {                // break point past the edge -> hard split
+    split = LINE_LEN;
+    drop  = false;
+  }
+
+  memcpy(nameBuf, raw, split);
+  nameBuf[split] = '\n';
+
+  const char* rest = raw + split + (drop ? 1 : 0);
+  uint8_t n2 = strlen(rest);
+  if (n2 > LINE_LEN) n2 = LINE_LEN;      // truncate line 2
+  memcpy(nameBuf + split + 1, rest, n2);
+  nameBuf[split + 1 + n2] = '\0';
+
+  for (uint8_t i = split + 1; nameBuf[i]; i++) {   // no stray breaks on line 2
+    if (nameBuf[i] == '\n') nameBuf[i] = ' ';
+  }
+}
 
 void showProgramName(uint8_t index) {
+  u8x8.clear();
   u8x8.setCursor(0, 0);
   if(index < sizeof(pgmNames)) {
-    nameBuf[0] = '0' + (index / 10);
-    nameBuf[1] = '0' + (index % 10);
-    nameBuf[2] = '.';
-    strncpy_P(nameBuf + 3, (char*)pgm_read_word(&pgmNames[index]), sizeof(nameBuf) - 4);
-    nameBuf[sizeof(nameBuf) - 1] = '\0';
+    formatProgramName(index);
     u8x8.print(nameBuf);
   } else {
     u8x8.print(u8x8_u16toa(index, 2));
@@ -113,7 +166,6 @@ void setup() {
   // For brighter LEDs, uncomment these two lines:
   //pinMode(mainLED, OUTPUT);
   //pinMode(mainLED, OUTPUT);
-  intro();
 
   // Footswitch press and release callbacks
   sw_center.onPress(onButtonPressed);
@@ -137,8 +189,11 @@ void setup() {
   Wire.begin();
   u8x8.begin();
   // u8x8.setFont(u8x8_font_inr46_4x8_n); // big numbers
-  u8x8.setFont(u8x8_font_profont29_2x3_r);
+  // u8x8.setFont(u8x8_font_courB24_3x4_r); // Good enough
+  u8x8.setFont(u8x8_font_inr21_2x4_r); // best, 2 lines of 8 chars
   //u8x8.print(u8x8_u16toa(0, 2));
+  u8x8.print("SPACEBAR\nMAN");
+  intro();
   showProgramName(0);
 }
 
@@ -415,13 +470,13 @@ void debugThis(const char* name, int i, int value) {
 
 // LED sequence at power-up
 void intro() {
-  int delayTime = 4;
-  fadeLed(leftLED);
-  fadeLed(mainLED);
-  fadeLed(rightLED);
-  fadeLed(mainLED);
-  fadeLed(leftLED);
-  delay(300);
+  int delayTime = 2;
+  for(int i=0;i<2;i++){
+    fadeLed(leftLED);
+    fadeLed(mainLED);
+    fadeLed(rightLED);
+    fadeLed(mainLED);
+  }
   for(int i=0;i<100;i++) {
     analogWrite(mainLED,i/4);
     delay(delayTime*2);
@@ -430,7 +485,7 @@ void intro() {
 
 void fadeLed(int led) {
   int maxVal = 50;
-  int delayTime = 4;
+  int delayTime = 2;
   for(int i=0;i<maxVal;i++) {
     int val;
     if(i<maxVal/2) val = i;
