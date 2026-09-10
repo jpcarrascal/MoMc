@@ -90,70 +90,6 @@ const char* const pgmNames[] PROGMEM = {
 const uint8_t LINE_LEN = 8;              // chars per line with the 2x4 font
 char nameBuf[LINE_LEN * 2 + 2];          // 8 + '\n' + 8 + '\0' = 18
 
-void formatProgramName(uint8_t index) {
-  char raw[LINE_LEN * 2 + 2];
-
-  raw[0] = '0' + (index / 10);
-  raw[1] = '0' + (index % 10);
-  raw[2] = '.';
-  strncpy_P(raw + 3, (char*)pgm_read_word(&pgmNames[index]), sizeof(raw) - 4);
-  raw[sizeof(raw) - 1] = '\0';
-
-  uint8_t len = strlen(raw);
-
-  if (len <= LINE_LEN) {                 // fits on one line, nothing to do
-    strcpy(nameBuf, raw);
-    return;
-  }
-
-  uint8_t split;                         // index in raw where line 2 starts
-  bool    drop;                          // is the char at the split consumed?
-
-  char* nl = strchr(raw, '\n');          // 1. honour an explicit newline
-  if (nl) {
-    split = nl - raw;
-    drop  = true;
-  } else {
-    char* sp = strchr(raw + 3, ' ');     // 2. first space
-    if (sp) {
-      split = sp - raw;
-      drop  = true;
-    } else {                             // 3. hard split
-      split = LINE_LEN;
-      drop  = false;
-    }
-  }
-
-  if (split > LINE_LEN) {                // break point past the edge -> hard split
-    split = LINE_LEN;
-    drop  = false;
-  }
-
-  memcpy(nameBuf, raw, split);
-  nameBuf[split] = '\n';
-
-  const char* rest = raw + split + (drop ? 1 : 0);
-  uint8_t n2 = strlen(rest);
-  if (n2 > LINE_LEN) n2 = LINE_LEN;      // truncate line 2
-  memcpy(nameBuf + split + 1, rest, n2);
-  nameBuf[split + 1 + n2] = '\0';
-
-  for (uint8_t i = split + 1; nameBuf[i]; i++) {   // no stray breaks on line 2
-    if (nameBuf[i] == '\n') nameBuf[i] = ' ';
-  }
-}
-
-void showProgramName(uint8_t index) {
-  u8x8.clear();
-  u8x8.setCursor(0, 0);
-  if(index < sizeof(pgmNames)) {
-    formatProgramName(index);
-    u8x8.print(nameBuf);
-  } else {
-    u8x8.print(u8x8_u16toa(index, 2));
-  }
-}
-
 MIDI_CREATE_DEFAULT_INSTANCE();
 void setup() {
   MIDI.begin(INchannel);
@@ -170,9 +106,12 @@ void setup() {
   // Footswitch press and release callbacks
   sw_center.onPress(onButtonPressed);
   sw_top_left.onPress(onButtonPressed);
-  sw_top_right.onPress(onButtonPressed);  
+  sw_top_right.onPress(onButtonPressed);
   sw_bottom_left.onPress(onButtonPressed);
   sw_bottom_right.onPress(onButtonPressed);
+
+  sw_top_left.onHoldRepeat(1500, 800, onButtonHoldRepeat);
+  sw_top_right.onHoldRepeat(1500, 800, onButtonHoldRepeat);
 
   sw_center.onRelease(onButtonReleased);
   sw_top_left.onRelease(onButtonReleased);
@@ -251,20 +190,52 @@ void loop() {
       setCCmode();
     }
   }
-}
+
+} // main() ends
+
+
+
+
 
 void configurePushButton(Bounce& bouncedButton){
   bouncedButton.interval(10); //10 is default
 }
 
+void onButtonHoldRepeat(Button& btn, uint16_t duration, uint8_t repeat_count){
+  debugThis("hold and repeat", 1,1);
+  if(mode == 2) {
+    if(btn.is(sw_top_left)) {
+      decrementProgram();
+    } else if (btn.is(sw_top_right)) {
+      incrementProgram();
+    }
+  }
+  // btn is a reference to the button that was held
+  // duration is how long the button has been held for
+  // repeat_count is the number of times the callback has been called
+}
+
+
+void decrementProgram() {
+    PCmodeTimeout = 0;
+  if(tentativeProgram > 0)
+    tentativeProgram--;
+  else
+    tentativeProgram = maxPgm;
+}
+
+void incrementProgram() {
+    PCmodeTimeout = 0;
+  if(tentativeProgram < maxPgm)
+    tentativeProgram++;
+  else
+    tentativeProgram = 0;
+}
+
 void onButtonPressed(Button& btn){
   if(btn.is(sw_top_left)) {
     if(mode == 2) {
-      PCmodeTimeout = 0;
-      if(tentativeProgram > 0)
-        tentativeProgram--;
-      else
-        tentativeProgram = maxPgm;
+      decrementProgram();
       //pcSend(tentativeProgram, PCchannel, nPCchannels);
     }
     else {
@@ -274,11 +245,7 @@ void onButtonPressed(Button& btn){
     }
   } else if (btn.is(sw_top_right)){
     if(mode == 2) {
-      PCmodeTimeout = 0;
-      if(tentativeProgram < maxPgm)
-        tentativeProgram++;
-      else
-        tentativeProgram = 0;
+      incrementProgram();
       //pcSend(tentativeProgram, PCchannel, nPCchannels);
     }
     else {
@@ -542,4 +509,68 @@ void MidiUSB_sendSysEx(const uint8_t *data, size_t size)
         }
     }
     MidiUSB.write(midiData, midiDataSize);
+}
+
+void formatProgramName(uint8_t index) {
+  char raw[LINE_LEN * 2 + 2];
+
+  raw[0] = '0' + (index / 10);
+  raw[1] = '0' + (index % 10);
+  raw[2] = '.';
+  strncpy_P(raw + 3, (char*)pgm_read_word(&pgmNames[index]), sizeof(raw) - 4);
+  raw[sizeof(raw) - 1] = '\0';
+
+  uint8_t len = strlen(raw);
+
+  if (len <= LINE_LEN) {                 // fits on one line, nothing to do
+    strcpy(nameBuf, raw);
+    return;
+  }
+
+  uint8_t split;                         // index in raw where line 2 starts
+  bool    drop;                          // is the char at the split consumed?
+
+  char* nl = strchr(raw, '\n');          // 1. honour an explicit newline
+  if (nl) {
+    split = nl - raw;
+    drop  = true;
+  } else {
+    char* sp = strchr(raw + 3, ' ');     // 2. first space
+    if (sp) {
+      split = sp - raw;
+      drop  = true;
+    } else {                             // 3. hard split
+      split = LINE_LEN;
+      drop  = false;
+    }
+  }
+
+  if (split > LINE_LEN) {                // break point past the edge -> hard split
+    split = LINE_LEN;
+    drop  = false;
+  }
+
+  memcpy(nameBuf, raw, split);
+  nameBuf[split] = '\n';
+
+  const char* rest = raw + split + (drop ? 1 : 0);
+  uint8_t n2 = strlen(rest);
+  if (n2 > LINE_LEN) n2 = LINE_LEN;      // truncate line 2
+  memcpy(nameBuf + split + 1, rest, n2);
+  nameBuf[split + 1 + n2] = '\0';
+
+  for (uint8_t i = split + 1; nameBuf[i]; i++) {   // no stray breaks on line 2
+    if (nameBuf[i] == '\n') nameBuf[i] = ' ';
+  }
+}
+
+void showProgramName(uint8_t index) {
+  u8x8.clear();
+  u8x8.setCursor(0, 0);
+  if(index < sizeof(pgmNames)) {
+    formatProgramName(index);
+    u8x8.print(nameBuf);
+  } else {
+    u8x8.print(u8x8_u16toa(index, 2));
+  }
 }
