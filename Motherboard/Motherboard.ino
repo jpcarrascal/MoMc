@@ -40,6 +40,8 @@ const int INchannel = 16;
 const int maxPgm = 63; // Max number of patches. Zoia = 63
 int tentativeProgram = 0;
 int currentProgram = 0;
+int favoriteProgram = 0;
+int swapProgram = 0;
 int PCmodeTimeout = 0;
 unsigned long previousMillis = 0;
 int mode = 1; // 1 = Control Change, 2 = Program Change
@@ -182,6 +184,7 @@ void loop() {
     PCmodeTimeout++;
     if(PCmodeTimeout > 30000) {
       if(currentProgram != tentativeProgram){
+        swapProgram = currentProgram;
         currentProgram = tentativeProgram;
         pcSend(currentProgram, PCchannel, nPCchannels);
       } else {
@@ -255,6 +258,7 @@ void onButtonPressed(Button& btn){
     }
   } else if (btn.is(sw_center)) {
     if(mode == 2) {
+      swapProgram = currentProgram;
       currentProgram = tentativeProgram;
       pcSend(currentProgram, PCchannel, nPCchannels);
       setCCmode();
@@ -264,11 +268,26 @@ void onButtonPressed(Button& btn){
       noteOnSend(note_center, 127, NoteChannel);
     }
   } else if (btn.is(sw_bottom_left)){
+    if(mode == 2) {
+      swapProgram = currentProgram;
+      currentProgram = favoriteProgram;
+      pcSend(currentProgram, PCchannel, nPCchannels);
+      setCCmode();
+    } else {
       ccSend(cc_bottom_left, 127, CCchannel);
       noteOnSend(note_bottom_left, 127, NoteChannel);
+    }
   } else if (btn.is(sw_bottom_right)){
+    if(mode == 2) {
+      tentativeProgram = swapProgram;
+      swapProgram = currentProgram;
+      currentProgram = tentativeProgram;
+      pcSend(currentProgram, PCchannel, nPCchannels);
+      setCCmode();
+    } else {
       ccSend(cc_bottom_right, 127, CCchannel);
       noteOnSend(note_bottom_right, 127, NoteChannel);
+    }
   }
 }
 
